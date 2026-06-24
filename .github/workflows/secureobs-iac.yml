@@ -1,0 +1,77 @@
+# >>> SECUREOBS MANAGED BLOCK v4 (do not edit between these markers — SecureObs maintains this block automatically)
+name: SecureObs IaC Plan
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: secureobs-iac-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  secureobs-iac:
+    runs-on: ubuntu-latest
+    environment: "gh-tf-action"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: "1.15.2"
+          terraform_wrapper: false
+
+      - name: "Terraform plan — terraform/azure"
+        working-directory: "terraform/azure"
+        env:
+          CI_RUN_ID: ${{ github.run_id }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: |
+          set -euo pipefail
+          umask 077
+          export TF_IN_AUTOMATION=1
+          export TF_INPUT=0
+          PLAN_DIR=".secureobs/${CI_RUN_ID}"
+          mkdir -p "$PLAN_DIR"
+          terraform init -input=false -lockfile=readonly -backend-config="backend.tfvars"
+          terraform validate -no-color
+          terraform plan -input=false -lock-timeout=5m -out="$PLAN_DIR/tfplan"
+          terraform show -json "$PLAN_DIR/tfplan" > "$PLAN_DIR/tfplan.json"
+          chmod 600 "$PLAN_DIR/tfplan" "$PLAN_DIR/tfplan.json"
+
+      - name: "SecureObs scan — terraform/azure"
+        env:
+          CI_RUN_ID: ${{ github.run_id }}
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -e SECUREOBS_API_KEY="${{ secrets.SECUREOBS_API_KEY }}" \
+            "secureobs/scanner:v1.2.11" scan \
+              --project-id "7a751a5c-b3b3-42d6-a19c-03750f6d7c36" \
+              --tenant-id "1067c3cb-9e2a-4ebf-b5c1-a070439bd5a3" \
+              --pipeline-run-id "${{ github.run_id }}" \
+              --terraform-root-id "95b11161-d7d1-40a9-9a1c-94a786571ace" \
+              --source-revision "${{ github.sha }}" \
+              --require-infrastructure-analysis \
+              --terraform-plan-json "terraform/azure/.secureobs/${CI_RUN_ID}/tfplan.json"
+
+      - name: "Remove plan files — terraform/azure"
+        if: always()
+        working-directory: "terraform/azure"
+        env:
+          CI_RUN_ID: ${{ github.run_id }}
+        run: |
+          PLAN_DIR=".secureobs/${CI_RUN_ID}"
+          rm -f "$PLAN_DIR/tfplan.json"
+          rm -f "$PLAN_DIR/tfplan"
+          rmdir "$PLAN_DIR" 2>/dev/null || true
+# <<< SECUREOBS MANAGED BLOCK END
