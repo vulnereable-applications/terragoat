@@ -1,4 +1,4 @@
-# >>> SECUREOBS MANAGED BLOCK v4 (do not edit between these markers — SecureObs maintains this block automatically)
+# >>> SECUREOBS MANAGED BLOCK v5 (do not edit between these markers — SecureObs maintains this block automatically)
 name: SecureObs IaC Plan
 
 on:
@@ -42,6 +42,7 @@ jobs:
           export TF_INPUT=0
           PLAN_DIR=".secureobs/${CI_RUN_ID}"
           mkdir -p "$PLAN_DIR"
+          terraform providers lock -platform=linux_amd64
           terraform init -input=false -lockfile=readonly -backend-config="backend.tfvars"
           terraform validate -no-color
           terraform plan -input=false -lock-timeout=5m -out="$PLAN_DIR/tfplan"
