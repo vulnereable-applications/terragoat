@@ -25,7 +25,7 @@ jobs:
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/workspace:ro" \
             -e SECUREOBS_API_KEY="${{ secrets.SECUREOBS_API_KEY }}" \
-            "secureobs/scanner:v1.2.11" scan \
+            "secureobs/scanner:latest" scan \
               --project-id "7a751a5c-b3b3-42d6-a19c-03750f6d7c36" \
               --tenant-id "1067c3cb-9e2a-4ebf-b5c1-a070439bd5a3" \
               --pipeline-run-id "${{ github.run_id }}-95b11161d7d140a99a1c94a786571ace" \
